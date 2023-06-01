@@ -1,5 +1,5 @@
 #include "EventLoop.h"
-
+#include "WorkerThread.h"
 class UvTest
 {
 public:
@@ -8,15 +8,7 @@ public:
     void doWake();
 
 private:
+    std::unique_ptr<WorkerThread> mWorkerThread;
     SM::EventLoopUV *mEventLoop;
-};
-
-class Manager
-{
-public:
-    static Manager& getInstance()
-    {
-        static Manager instance;
-        return instance;
-    }
+    SM::EventLoopUV *mWorkerLoop;
 };

@@ -10,26 +10,21 @@ namespace SM
 
     EventLoopUV::EventLoopUV(SM::Mode mode)
         : loop_(nullptr),
-          async_(nullptr),
-          status_(NotStarted)
+          async_(nullptr)
     {
         if (mode == SM::Mode::New)
         {
             loop_ = new uv_loop_t();
             int initRet = uv_loop_init(loop_);
             assert(initRet == 0);
-           
-        }
-        else
-        {
-            loop_ = uv_default_loop();
         }
         async_ = new Async();
-         async_->init(loop_);
+        async_->init(loop_);
     }
 
     EventLoopUV::~EventLoopUV()
     {
+        this->stop();
         if (loop_ != uv_default_loop())
         {
             uv_loop_close(loop_);
@@ -38,89 +33,43 @@ namespace SM
         }
     }
 
-    EventLoopUV &EventLoopUV::DefaultLoop()
+    void EventLoopUV::run()
     {
-        static EventLoopUV defaultLoop(SM::Mode::Default);
-        return defaultLoop;
+        uv_run(loop_, UV_RUN_DEFAULT);
     }
 
-    uv_loop_t *EventLoopUV::handle()
+    void EventLoopUV::runNoWait()
     {
-        return loop_;
-    }
-
-    int EventLoopUV::run()
-    {
-        if (status_ == Status::NotStarted)
-        {
-            
-            loopThreadId_ = std::this_thread::get_id();
-            status_ = Status::Started;
-            auto rst = ::uv_run(loop_, UV_RUN_DEFAULT);
-            status_ = Status::Stopped;
-            return 0;
-        }
-        return -1;
-    }
-
-    int EventLoopUV::runNoWait()
-    {
-        if (status_ == Status::NotStarted)
-        {
-            async_->init(loop_);
-            loopThreadId_ = std::this_thread::get_id();
-            status_ = Status::Started;
-            auto rst = ::uv_run(loop_, UV_RUN_NOWAIT);
-            status_ = Status::NotStarted;
-            return rst;
-        }
-        return -1;
+        uv_run(loop_, UV_RUN_NOWAIT);
     }
 
     int EventLoopUV::stop()
     {
-        if (status_ == Status::Started)
-        {
-            async_->close([this]()
-                          { uv_stop(this->loop_); });
-             return 0;
-        }
-        return -1;
+        async_->close([this]()
+                      { uv_stop(this->loop_); });
+        return 0;
     }
 
-    bool EventLoopUV::isStopped()
-    {
-        return status_ == Status::Stopped;
-    }
-
-    SM::Status EventLoopUV::getStatus()
-    {
-        return status_;
-    }
-
-    bool EventLoopUV::isRunInLoopThread()
-    {
-        if (status_ == Status::Started)
-        {
-            return std::this_thread::get_id() == loopThreadId_;
-        }
-        // EventLoop未运行.
-        return false;
-    }
-
-    void EventLoopUV::runInThisLoop(const DefaultCallback &func)
+    void EventLoopUV::postTaskAndWait(DefaultCallback &&func)
     {
         if (nullptr == func)
             return;
 
-        if (isRunInLoopThread() || isStopped())
-        {
-            func();
-            return;
-        }
+        bool ready = false;
+        std::mutex mtx;
+        std::unique_lock<std::mutex> lg(mtx);
+        std::condition_variable mInitCond;
+        this->postTask([&mInitCond, &ready, task = std::move(func)]()
+                       {
+             task();
+             ready = true;
+             mInitCond.notify_all(); });
+
+        mInitCond.wait(lg, [&ready]()
+                       { return ready; });
     }
 
-    void EventLoopUV::postAsyncTask(DefaultCallback&&func)
+    void EventLoopUV::postTask(DefaultCallback &&func)
     {
         if (nullptr == func)
         {
@@ -128,13 +77,4 @@ namespace SM
         }
         async_->runInThisLoop(std::move(func));
     }
-    // const char *EventLoopUV::GetErrorMessage(int status)
-    // {
-    //     if (WriteInfo::Disconnected == status)
-    //     {
-    //         static char info[] = "the connection is disconnected";
-    //         return info;
-    //     }
-    //     return uv_strerror(status);
-    // }
 };

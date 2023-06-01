@@ -14,14 +14,15 @@ namespace SM
         if (nullptr == handle_)
         {
             handle_ = new uv_async_t();
-            handle_->data = static_cast<void *>(this);
+            handle_->data = this;
             uv_async_init(loop_, handle_, Async::Callback);
-            uv_async_send(handle_);
+           // uv_async_send(handle_);
         }
     }
 
     Async::~Async()
     {
+        //close();
     }
 
     void Async::runInThisLoop(DefaultCallback&& callback)
@@ -50,9 +51,9 @@ namespace SM
         }
     }
 
-    void Async::close(Async::OnCloseCompletedCallback callback)
+    void Async::close(Async::OnCloseCompletedCallback&& callback)
     {
-        onCloseCompletCallback_ = callback;
+        onCloseCompletCallback_ = std::move(callback);
         if (::uv_is_closing((uv_handle_t *)handle_) == 0)
         {
             ::uv_close((uv_handle_t *)handle_, [](uv_handle_t *handle)
@@ -78,7 +79,7 @@ namespace SM
     {
         if (nullptr != onCloseCompletCallback_)
         {
-            onCloseCompletCallback_(this);
+            onCloseCompletCallback_();
         }
     }
 };

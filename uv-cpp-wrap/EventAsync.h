@@ -12,14 +12,14 @@ using DefaultCallback = std::function<void()>;
 class Async  : public std::enable_shared_from_this<Async>
 {
 public:
-    using OnCloseCompletedCallback = std::function<void(Async*)>;
+    using OnCloseCompletedCallback = std::function<void()>;
     Async();
     void  init(uv_loop_t *loop_);
     virtual ~Async();
 
     void runInThisLoop(DefaultCallback&& callback);
 
-    void close(OnCloseCompletedCallback callback);
+    void close(OnCloseCompletedCallback&& callback);
     //EventLoop* Loop();
 private:
     uv_loop_t *loop_;
@@ -32,8 +32,6 @@ private:
     void onCloseCompleted();
 
 };
-
-using AsyncPtr = std::shared_ptr<Async>;
 
 }
 #endif

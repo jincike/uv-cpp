@@ -7,7 +7,7 @@ set(uv_sources
     main.cpp 
     EventLoop.cpp
     EventAsync.cpp
-
+    WorkerThread.cpp
     UvTest.cpp
 )
 
